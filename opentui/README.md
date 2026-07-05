@@ -17,7 +17,7 @@
 
 ## Usage
 
-With Nix (no setup required — bun and ffmpeg are provided):
+With Nix (no setup required — the media assets are downloaded and converted as part of the build, so playback starts immediately):
 
 ```bash
 nix run github:ryoppippi/bad-apple#opentui
@@ -32,7 +32,7 @@ bun install
 bun start
 ```
 
-On the first run the player downloads the PV from the Internet Archive and generates the packed 1bpp frames plus the WAV audio track into `$XDG_CACHE_HOME/opentui-bad-apple` (default `~/.cache/opentui-bad-apple`). Subsequent runs use the cached assets and start instantly. `bun run generate` runs the same generation step on its own if you want to pre-warm or rebuild the cache, and deleting the cache directory is always safe.
+When run with Bun, the first start downloads the PV from the Internet Archive and generates the packed 1bpp frames plus the WAV audio track into `$XDG_CACHE_HOME/opentui-bad-apple` (default `~/.cache/opentui-bad-apple`). Subsequent runs use the cached assets and start instantly. `bun run generate` runs the same generation step on its own if you want to pre-warm or rebuild the cache, and deleting the cache directory is always safe. (The Nix package instead builds these assets as a derivation and points the player at them via `OPENTUI_BAD_APPLE_ASSETS`.)
 
 | Key   | Action        |
 | ----- | ------------- |

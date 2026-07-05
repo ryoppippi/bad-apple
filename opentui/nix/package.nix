@@ -1,4 +1,5 @@
 {
+  badAppleAssets,
   bun,
   bun2nix,
   ffmpeg-headless,
@@ -33,13 +34,15 @@ bun2nix.mkDerivation {
     runHook postBuild
   '';
 
-  # The player shells out to ffmpeg/ffprobe on first run to generate its
-  # media cache, so put them on the wrapped binary's PATH.
+  # Point the player at the Nix-built assets (overridable by the user), and
+  # keep ffmpeg/ffprobe on PATH as a fallback for self-generation when the
+  # assets variable is unset explicitly.
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
     cp -p ./opentui-bad-apple-bin $out/bin/opentui-bad-apple
     wrapProgram $out/bin/opentui-bad-apple \
+      --set-default OPENTUI_BAD_APPLE_ASSETS ${badAppleAssets} \
       --prefix PATH : ${lib.makeBinPath [ ffmpeg-headless ]}
     runHook postInstall
   '';

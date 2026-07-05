@@ -28,7 +28,7 @@
  */
 
 import { $ } from "bun";
-import { AUDIO_PATH, CACHE_DIR, FRAMES_PATH, VIDEO_PATH } from "../src/paths.ts";
+import { ASSETS_PRESUPPLIED, AUDIO_PATH, CACHE_DIR, FRAMES_PATH, VIDEO_PATH } from "../src/paths.ts";
 
 /** Internet Archive mirror of the original PV (nicovideo sm8628149, 480x360). */
 const VIDEO_URL =
@@ -216,6 +216,11 @@ async function packFrames(ffmpeg: string, width: number, height: number, fps: nu
  * @throws If ffmpeg/ffprobe are unavailable or any pipeline step fails
  */
 export async function generate(): Promise<void> {
+	if (ASSETS_PRESUPPLIED) {
+		throw new Error(
+			"assets are supplied externally via OPENTUI_BAD_APPLE_ASSETS (read-only); unset it to generate into the cache",
+		);
+	}
 	await $`mkdir -p ${CACHE_DIR}`;
 	const ffmpeg = requireTool("ffmpeg");
 	const ffprobe = requireTool("ffprobe");

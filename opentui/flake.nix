@@ -21,10 +21,13 @@
       ];
 
       perSystem =
-        { pkgs, inputs', ... }:
+        { pkgs, inputs', config, ... }:
         {
+          packages.assets = pkgs.callPackage ./nix/assets.nix { };
+
           packages.default = pkgs.callPackage ./nix/package.nix {
             bun2nix = inputs'.bun2nix.packages.default;
+            badAppleAssets = config.packages.assets;
           };
 
           # Regenerates nix/bun.lock.nix after bun.lock changes:

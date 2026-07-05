@@ -22,7 +22,7 @@ import {
 import { generate } from "../scripts/generate.ts";
 import { frameToBrailleLines } from "./braille.ts";
 import { loadMovie, type Movie } from "./movie.ts";
-import { AUDIO_PATH, FRAMES_PATH } from "./paths.ts";
+import { ASSETS_PRESUPPLIED, AUDIO_PATH, FRAMES_PATH } from "./paths.ts";
 
 const SAMPLE_RATE = 48000;
 
@@ -87,19 +87,27 @@ function formatTime(seconds: number): string {
 }
 
 // First run: generate any missing assets (video download + ffmpeg conversion)
-// before the TUI takes over the screen. Cached assets make this a no-op.
+// before the TUI takes over the screen. Cached assets make this a no-op, and
+// externally supplied assets (e.g. built by Nix) are used as-is.
 if (!(await Bun.file(FRAMES_PATH).exists()) || !(await Bun.file(AUDIO_PATH).exists())) {
-	console.log("generating missing assets (first run only)...");
-	try {
-		await generate();
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
+	if (ASSETS_PRESUPPLIED) {
 		if (!(await Bun.file(FRAMES_PATH).exists())) {
-			console.error(`error: could not generate frame data: ${message}`);
+			console.error(`error: OPENTUI_BAD_APPLE_ASSETS is set but ${FRAMES_PATH} does not exist.`);
 			process.exit(1);
 		}
-		// Frames are enough to play; missing audio just means a silent video
-		console.warn(`warning: no audio track (${message}); playing video only`);
+	} else {
+		console.log("generating missing assets (first run only)...");
+		try {
+			await generate();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (!(await Bun.file(FRAMES_PATH).exists())) {
+				console.error(`error: could not generate frame data: ${message}`);
+				process.exit(1);
+			}
+			// Frames are enough to play; missing audio just means a silent video
+			console.warn(`warning: no audio track (${message}); playing video only`);
+		}
 	}
 }
 const movie = await loadMovie(FRAMES_PATH);
