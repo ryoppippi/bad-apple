@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    bun2nix = {
+      url = "github:nix-community/bun2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -17,28 +21,27 @@
       ];
 
       perSystem =
-        { pkgs, ... }:
+        { pkgs, inputs', ... }:
         {
-          # Runs the player from a writable copy of the project in the user's
-          # cache directory: the nix store is read-only, but bun needs to
-          # install node_modules next to package.json, and the player itself
-          # caches generated media in the same cache root.
-          packages.default = pkgs.writeShellApplication {
-            name = "opentui-bad-apple";
-            runtimeInputs = [
-              pkgs.bun
-              pkgs.ffmpeg-headless
-              pkgs.coreutils
-            ];
-            text = ''
-              src="${./.}"
-              app="''${XDG_CACHE_HOME:-$HOME/.cache}/opentui-bad-apple/app"
-              mkdir -p "$app"
-              cp -r --no-preserve=mode,ownership "$src"/. "$app"/
-              cd "$app"
-              bun install --frozen-lockfile --silent
-              exec bun run src/index.ts "$@"
-            '';
+          packages.default = pkgs.callPackage ./nix/package.nix {
+            bun2nix = inputs'.bun2nix.packages.default;
+          };
+
+          # Regenerates nix/bun.lock.nix after bun.lock changes:
+          # `nix run .#update-bun-lock`
+          apps.update-bun-lock = {
+            type = "app";
+            program = pkgs.lib.getExe (
+              pkgs.writeShellApplication {
+                name = "update-bun-lock";
+                runtimeInputs = [ inputs'.bun2nix.packages.default ];
+                text = ''
+                  bun2nix -o nix/bun.lock.nix
+                  printf '\n' >> nix/bun.lock.nix
+                '';
+              }
+            );
+            meta.description = "Regenerate nix/bun.lock.nix with the flake-pinned bun2nix";
           };
 
           devShells.default = pkgs.mkShell {
