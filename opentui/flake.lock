@@ -49,30 +49,10 @@
         "type": "github"
       }
     },
-    "opentui": {
-      "inputs": {
-        "flake-parts": [
-          "flake-parts"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "path": "./opentui",
-        "type": "path"
-      },
-      "original": {
-        "path": "./opentui",
-        "type": "path"
-      },
-      "parent": []
-    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
-        "nixpkgs": "nixpkgs",
-        "opentui": "opentui"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

@@ -21,6 +21,8 @@ With Nix (no setup required — bun and ffmpeg are provided):
 
 ```bash
 nix run github:ryoppippi/bad-apple#opentui
+# or target this subflake directly
+nix run 'github:ryoppippi/bad-apple?dir=opentui'
 ```
 
 Or directly with Bun from this directory:

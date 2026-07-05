@@ -4,6 +4,11 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    opentui = {
+      url = "path:./opentui";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+    };
   };
 
   outputs =
@@ -16,41 +21,18 @@
         "aarch64-darwin"
       ];
 
+      # Each player lives in its own subflake; re-export them here so
+      # everything is runnable from the repository root, e.g.
+      # `nix run github:ryoppippi/bad-apple#opentui`.
       perSystem =
-        { pkgs, ... }:
+        { inputs', ... }:
         {
-          packages = rec {
-            default = opentui;
-
-            # Runs the OpenTUI player from a writable copy of the project in
-            # the user's cache directory: the nix store is read-only, but bun
-            # needs to install node_modules next to package.json, and the
-            # player itself caches generated media in the same cache root.
-            opentui = pkgs.writeShellApplication {
-              name = "opentui-bad-apple";
-              runtimeInputs = [
-                pkgs.bun
-                pkgs.ffmpeg-headless
-                pkgs.coreutils
-              ];
-              text = ''
-                src="${./opentui}"
-                app="''${XDG_CACHE_HOME:-$HOME/.cache}/opentui-bad-apple/app"
-                mkdir -p "$app"
-                cp -r --no-preserve=mode,ownership "$src"/. "$app"/
-                cd "$app"
-                bun install --frozen-lockfile --silent
-                exec bun run src/index.ts "$@"
-              '';
-            };
+          packages = {
+            default = inputs'.opentui.packages.default;
+            opentui = inputs'.opentui.packages.default;
           };
 
-          devShells.default = pkgs.mkShell {
-            packages = [
-              pkgs.bun
-              pkgs.ffmpeg-headless
-            ];
-          };
+          devShells.default = inputs'.opentui.devShells.default;
         };
     };
 }
