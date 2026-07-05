@@ -9,7 +9,10 @@
  *   3. Decode every video frame to grayscale with ffmpeg, threshold it to
  *      black & white, and pack it as a 1-bit-per-pixel bitmap.
  *
- * The packed frames are written to `assets/frames.bin.gz`:
+ * Fallible steps return `Result` values (@praha/byethrow) instead of
+ * throwing; `generate` composes them into a single pipeline.
+ *
+ * The packed frames are written to `frames.bin.gz` in the cache directory:
  *
  *   | offset | size | field                         |
  *   |--------|------|-------------------------------|
@@ -22,12 +25,13 @@
  *   | 12     | 4    | frame count (LE)              |
  *   | 16     | ...  | frames, 1bpp, rows padded to a byte boundary |
  *
- * All generated assets stay out of git (see .gitignore): the video and music
- * belong to their respective rights holders, so this repository only ships
- * code and every user generates the data locally.
+ * The generated assets stay out of git: the video and music belong to their
+ * respective rights holders, so this repository only ships code and the data
+ * is produced locally (at runtime here, or at build time by the Nix package).
  */
 
 import { $ } from "bun";
+import { Result } from "@praha/byethrow";
 import { ASSETS_PRESUPPLIED, AUDIO_PATH, CACHE_DIR, FRAMES_PATH, VIDEO_PATH } from "../src/paths.ts";
 
 /** Internet Archive mirror of the original PV (nicovideo sm8628149, 480x360). */
@@ -38,54 +42,83 @@ const VIDEO_URL =
 const THRESHOLD = 128;
 
 /**
+ * Wraps an unknown thrown value into an Error with a message prefix.
+ *
+ * @param message - Context describing the failed step
+ * @returns A `catch` handler for `Result.try`
+ */
+function toError(message: string): (cause: unknown) => Error {
+	return (cause) => new Error(message, { cause });
+}
+
+/**
  * Resolves an executable from PATH.
  *
  * @param name - Executable name, e.g. "ffmpeg"
- * @returns Absolute path to the executable
- * @throws If the executable is not on PATH, with a hint on how to get it
+ * @returns The absolute path to the executable, or a failure with a hint on
+ *   how to get it
  */
-function requireTool(name: string): string {
+function requireTool(name: string): Result.Result<string, Error> {
 	const path = Bun.which(name);
 	if (path === null) {
-		throw new Error(
-			`${name} not found in PATH.\n` +
-				`hint: run inside a nix shell, e.g.\n` +
-				`  nix shell nixpkgs#ffmpeg-headless --command bun start`,
+		return Result.fail(
+			new Error(
+				`${name} not found in PATH.\n` +
+					`hint: run inside a nix shell, e.g.\n` +
+					`  nix shell nixpkgs#ffmpeg-headless --command bun start`,
+			),
 		);
 	}
-	return path;
+	return Result.succeed(path);
 }
 
 /** Downloads the source video unless it already exists. */
-async function ensureVideo(): Promise<void> {
+async function ensureVideo(): Result.ResultAsync<void, Error> {
 	if (await Bun.file(VIDEO_PATH).exists()) {
 		console.log(`video: ${VIDEO_PATH} (cached)`);
-		return;
+		return Result.succeed();
 	}
 	console.log(`video: downloading ${VIDEO_URL}`);
-	const res = await fetch(VIDEO_URL);
-	if (!res.ok) {
-		throw new Error(`download failed: HTTP ${res.status}`);
-	}
-	await Bun.write(VIDEO_PATH, res);
-	console.log(`video: saved to ${VIDEO_PATH}`);
+	return Result.try({
+		try: async () => {
+			const res = await fetch(VIDEO_URL);
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status}`);
+			}
+			await Bun.write(VIDEO_PATH, res);
+			console.log(`video: saved to ${VIDEO_PATH}`);
+		},
+		catch: toError("video download failed"),
+	});
 }
 
 /** Extracts the audio track as 48 kHz 16-bit PCM WAV unless it already exists. */
-async function ensureAudio(ffmpeg: string): Promise<void> {
+async function ensureAudio(ffmpeg: string): Result.ResultAsync<void, Error> {
 	if (await Bun.file(AUDIO_PATH).exists()) {
 		console.log(`audio: ${AUDIO_PATH} (cached)`);
-		return;
+		return Result.succeed();
 	}
 	console.log("audio: extracting WAV track");
-	const proc = Bun.spawn(
-		[ffmpeg, "-v", "error", "-y", "-i", VIDEO_PATH, "-vn", "-acodec", "pcm_s16le", "-ar", "48000", AUDIO_PATH],
-		{ stdout: "inherit", stderr: "inherit" },
-	);
-	if ((await proc.exited) !== 0) {
-		throw new Error("ffmpeg audio extraction failed");
-	}
-	console.log(`audio: saved to ${AUDIO_PATH}`);
+	return Result.try({
+		try: async () => {
+			const proc = Bun.spawn(
+				[ffmpeg, "-v", "error", "-y", "-i", VIDEO_PATH, "-vn", "-acodec", "pcm_s16le", "-ar", "48000", AUDIO_PATH],
+				{ stdout: "inherit", stderr: "inherit" },
+			);
+			if ((await proc.exited) !== 0) {
+				throw new Error(`ffmpeg exited with code ${proc.exitCode}`);
+			}
+			console.log(`audio: saved to ${AUDIO_PATH}`);
+		},
+		catch: toError("audio extraction failed"),
+	});
+}
+
+/** Video stream geometry reported by ffprobe. */
+interface VideoInfo {
+	width: number;
+	height: number;
+	fps: number;
 }
 
 /**
@@ -93,48 +126,60 @@ async function ensureAudio(ffmpeg: string): Promise<void> {
  *
  * @returns Width, height, and frames per second of the first video stream
  */
-async function probeVideo(ffprobe: string): Promise<{ width: number; height: number; fps: number }> {
-	const proc = Bun.spawn(
-		[
-			ffprobe,
-			"-v",
-			"error",
-			"-select_streams",
-			"v:0",
-			"-show_entries",
-			"stream=width,height,r_frame_rate",
-			"-of",
-			"json",
-			VIDEO_PATH,
-		],
-		{ stdout: "pipe", stderr: "inherit" },
-	);
-	const out = (await new Response(proc.stdout).json()) as {
-		streams?: { width: number; height: number; r_frame_rate: string }[];
-	};
-	if ((await proc.exited) !== 0) {
-		throw new Error("ffprobe failed");
-	}
-	const stream = out.streams?.[0];
-	if (stream === undefined) {
-		throw new Error("ffprobe: no video stream found");
-	}
-	// r_frame_rate is a rational like "30/1"
-	const [num = 0, den = 1] = stream.r_frame_rate.split("/").map(Number);
-	return { width: stream.width, height: stream.height, fps: num / den };
+function probeVideo(ffprobe: string): Result.ResultAsync<VideoInfo, Error> {
+	return Result.try({
+		try: async () => {
+			const proc = Bun.spawn(
+				[
+					ffprobe,
+					"-v",
+					"error",
+					"-select_streams",
+					"v:0",
+					"-show_entries",
+					"stream=width,height,r_frame_rate",
+					"-of",
+					"json",
+					VIDEO_PATH,
+				],
+				{ stdout: "pipe", stderr: "inherit" },
+			);
+			const out = (await new Response(proc.stdout).json()) as {
+				streams?: { width: number; height: number; r_frame_rate: string }[];
+			};
+			if ((await proc.exited) !== 0) {
+				throw new Error(`ffprobe exited with code ${proc.exitCode}`);
+			}
+			const stream = out.streams?.[0];
+			if (stream === undefined) {
+				throw new Error("no video stream found");
+			}
+			// r_frame_rate is a rational like "30/1"
+			const [num = 0, den = 1] = stream.r_frame_rate.split("/").map(Number);
+			return { width: stream.width, height: stream.height, fps: num / den };
+		},
+		catch: toError("probing the video failed"),
+	});
 }
 
 /**
  * Decodes all frames as raw grayscale, thresholds them to 1bpp bitmaps, and
  * writes the gzip-compressed frame pack.
  */
-async function packFrames(ffmpeg: string, width: number, height: number, fps: number): Promise<void> {
+async function packFrames(ffmpeg: string, { width, height, fps }: VideoInfo): Result.ResultAsync<void, Error> {
 	if (await Bun.file(FRAMES_PATH).exists()) {
 		console.log(`frames: ${FRAMES_PATH} (cached)`);
-		return;
+		return Result.succeed();
 	}
 	console.log(`frames: decoding ${width}x${height}@${fps} to 1bpp`);
+	return Result.try({
+		try: () => packFramesInner(ffmpeg, width, height, fps),
+		catch: toError("frame packing failed"),
+	});
+}
 
+/** The unguarded body of {@link packFrames}. */
+async function packFramesInner(ffmpeg: string, width: number, height: number, fps: number): Promise<void> {
 	const graySize = width * height;
 	const rowBytes = Math.ceil(width / 8);
 	const packedSize = rowBytes * height;
@@ -186,7 +231,7 @@ async function packFrames(ffmpeg: string, width: number, height: number, fps: nu
 		pending = pending.slice(offset);
 	}
 	if ((await proc.exited) !== 0) {
-		throw new Error("ffmpeg frame decoding failed");
+		throw new Error(`ffmpeg exited with code ${proc.exitCode}`);
 	}
 
 	const frameCount = packedFrames.length;
@@ -213,29 +258,41 @@ async function packFrames(ffmpeg: string, width: number, height: number, fps: nu
  * Ensures all playback assets exist, generating whatever is missing.
  * Existing assets are kept as-is, so repeated calls are cheap no-ops.
  *
- * @throws If ffmpeg/ffprobe are unavailable or any pipeline step fails
+ * @returns Success once every asset is in place, or the first failure
+ *   (missing ffmpeg/ffprobe, download error, or a failed pipeline step)
  */
-export async function generate(): Promise<void> {
+export function generate(): Result.ResultAsync<void, Error> {
 	if (ASSETS_PRESUPPLIED) {
-		throw new Error(
-			"assets are supplied externally via OPENTUI_BAD_APPLE_ASSETS (read-only); unset it to generate into the cache",
+		return Promise.resolve(
+			Result.fail(
+				new Error(
+					"assets are supplied externally via OPENTUI_BAD_APPLE_ASSETS (read-only); unset it to generate into the cache",
+				),
+			),
 		);
 	}
-	await $`mkdir -p ${CACHE_DIR}`;
-	const ffmpeg = requireTool("ffmpeg");
-	const ffprobe = requireTool("ffprobe");
-	await ensureVideo();
-	await ensureAudio(ffmpeg);
-	const { width, height, fps } = await probeVideo(ffprobe);
-	await packFrames(ffmpeg, width, height, fps);
+	return Result.pipe(
+		Result.do(),
+		Result.bind("ffmpeg", () => requireTool("ffmpeg")),
+		Result.bind("ffprobe", () => requireTool("ffprobe")),
+		Result.andThrough(() =>
+			Result.try({
+				try: () => $`mkdir -p ${CACHE_DIR}`.quiet(),
+				catch: toError(`failed to create ${CACHE_DIR}`),
+			}),
+		),
+		Result.andThrough(() => ensureVideo()),
+		Result.andThrough(({ ffmpeg }) => ensureAudio(ffmpeg)),
+		Result.bind("video", ({ ffprobe }) => probeVideo(ffprobe)),
+		Result.andThen(({ ffmpeg, video }) => packFrames(ffmpeg, video)),
+	);
 }
 
 if (import.meta.main) {
-	try {
-		await generate();
-		console.log("done. run `bun start` to play.");
-	} catch (error) {
-		console.error(`error: ${error instanceof Error ? error.message : error}`);
+	const result = await generate();
+	if (Result.isFailure(result)) {
+		console.error(`error: ${result.error.message}`);
 		process.exit(1);
 	}
+	console.log("done. run `bun start` to play.");
 }

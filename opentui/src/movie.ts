@@ -3,6 +3,8 @@
  * scripts/generate.ts (see that file for the header layout).
  */
 
+import { Result } from "@praha/byethrow";
+
 /** Decoded frame pack: geometry plus the raw 1bpp frame bytes. */
 export interface Movie {
 	/** Source video width in pixels */
@@ -24,17 +26,15 @@ export interface Movie {
 }
 
 /**
- * Loads and validates a gzip-compressed frame pack.
+ * Parses an already-decompressed frame pack.
  *
- * @param path - Path to frames.bin.gz
- * @returns The decoded movie
- * @throws If the file has a bad magic number or truncated frame data
+ * @param raw - The gunzipped pack (header + frame data)
+ * @returns The decoded movie, or a failure describing the corruption
  */
-export async function loadMovie(path: string): Promise<Movie> {
-	const raw = Bun.gunzipSync(await Bun.file(path).bytes());
+function parseMovie(raw: Uint8Array): Result.Result<Movie, Error> {
 	const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
 	if (raw[0] !== 0x42 || raw[1] !== 0x41 || raw[2] !== 0x50 || raw[3] !== 0x56) {
-		throw new Error("invalid frame pack: bad magic");
+		return Result.fail(new Error("invalid frame pack: bad magic"));
 	}
 	const width = view.getUint16(6, true);
 	const height = view.getUint16(8, true);
@@ -44,9 +44,25 @@ export async function loadMovie(path: string): Promise<Movie> {
 	const frameSize = rowBytes * height;
 	const data = raw.subarray(16);
 	if (data.length < frameSize * frameCount) {
-		throw new Error("invalid frame pack: truncated frame data");
+		return Result.fail(new Error("invalid frame pack: truncated frame data"));
 	}
-	return { width, height, fps, frameCount, rowBytes, frameSize, data, duration: frameCount / fps };
+	return Result.succeed({ width, height, fps, frameCount, rowBytes, frameSize, data, duration: frameCount / fps });
+}
+
+/**
+ * Loads and validates a gzip-compressed frame pack.
+ *
+ * @param path - Path to frames.bin.gz
+ * @returns The decoded movie, or a failure if the file is unreadable or corrupt
+ */
+export function loadMovie(path: string): Result.ResultAsync<Movie, Error> {
+	return Result.pipe(
+		Result.try({
+			try: async () => Bun.gunzipSync(await Bun.file(path).bytes()),
+			catch: (cause) => new Error(`failed to read frame pack ${path}`, { cause }),
+		}),
+		Result.andThen(parseMovie),
+	);
 }
 
 /**

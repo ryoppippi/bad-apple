@@ -19,6 +19,7 @@ import {
 	type RenderContext,
 	type RenderableOptions,
 } from "@opentui/core";
+import { Result } from "@praha/byethrow";
 import { generate } from "../scripts/generate.ts";
 import { frameToBrailleLines } from "./braille.ts";
 import { loadMovie, type Movie } from "./movie.ts";
@@ -97,20 +98,23 @@ if (!(await Bun.file(FRAMES_PATH).exists()) || !(await Bun.file(AUDIO_PATH).exis
 		}
 	} else {
 		console.log("generating missing assets (first run only)...");
-		try {
-			await generate();
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+		const generated = await generate();
+		if (Result.isFailure(generated)) {
 			if (!(await Bun.file(FRAMES_PATH).exists())) {
-				console.error(`error: could not generate frame data: ${message}`);
+				console.error(`error: could not generate frame data: ${generated.error.message}`);
 				process.exit(1);
 			}
 			// Frames are enough to play; missing audio just means a silent video
-			console.warn(`warning: no audio track (${message}); playing video only`);
+			console.warn(`warning: no audio track (${generated.error.message}); playing video only`);
 		}
 	}
 }
-const movie = await loadMovie(FRAMES_PATH);
+const loaded = await loadMovie(FRAMES_PATH);
+if (Result.isFailure(loaded)) {
+	console.error(`error: ${loaded.error.message}\nhint: delete the file and rerun to regenerate it.`);
+	process.exit(1);
+}
+const movie = loaded.value;
 
 const renderer = await createCliRenderer({
 	exitOnCtrlC: true,
