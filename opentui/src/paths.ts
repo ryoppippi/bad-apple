@@ -14,7 +14,7 @@ import { join } from "node:path";
 const cacheRoot = process.env["XDG_CACHE_HOME"] ?? join(homedir(), ".cache");
 
 /** Directory holding all generated Bad Apple assets. */
-export const CACHE_DIR = join(cacheRoot, "bad-apple-opentui");
+export const CACHE_DIR = join(cacheRoot, "opentui-bad-apple");
 
 /** Source video downloaded from the Internet Archive. */
 export const VIDEO_PATH = join(CACHE_DIR, "bad-apple.mp4");

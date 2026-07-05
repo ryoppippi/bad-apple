@@ -1,5 +1,5 @@
 {
-  "name": "bad-apple-opentui",
+  "name": "opentui-bad-apple",
   "module": "src/index.ts",
   "type": "module",
   "private": true,

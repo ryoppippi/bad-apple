@@ -27,7 +27,7 @@
             # needs to install node_modules next to package.json, and the
             # player itself caches generated media in the same cache root.
             opentui = pkgs.writeShellApplication {
-              name = "bad-apple-opentui";
+              name = "opentui-bad-apple";
               runtimeInputs = [
                 pkgs.bun
                 pkgs.ffmpeg-headless
@@ -35,7 +35,7 @@
               ];
               text = ''
                 src="${./opentui}"
-                app="''${XDG_CACHE_HOME:-$HOME/.cache}/bad-apple-opentui/app"
+                app="''${XDG_CACHE_HOME:-$HOME/.cache}/opentui-bad-apple/app"
                 mkdir -p "$app"
                 cp -r --no-preserve=mode,ownership "$src"/. "$app"/
                 cd "$app"

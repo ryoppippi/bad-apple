@@ -1,4 +1,4 @@
-# bad-apple-opentui
+# opentui-bad-apple
 
 [Bad Apple!!](https://www.nicovideo.jp/watch/sm8628149) player for the terminal, built with [OpenTUI](https://opentui.com/) (`@opentui/core`).
 
@@ -30,7 +30,7 @@ bun install
 bun start
 ```
 
-On the first run the player downloads the PV from the Internet Archive and generates the packed 1bpp frames plus the WAV audio track into `$XDG_CACHE_HOME/bad-apple-opentui` (default `~/.cache/bad-apple-opentui`). Subsequent runs use the cached assets and start instantly. `bun run generate` runs the same generation step on its own if you want to pre-warm or rebuild the cache, and deleting the cache directory is always safe.
+On the first run the player downloads the PV from the Internet Archive and generates the packed 1bpp frames plus the WAV audio track into `$XDG_CACHE_HOME/opentui-bad-apple` (default `~/.cache/opentui-bad-apple`). Subsequent runs use the cached assets and start instantly. `bun run generate` runs the same generation step on its own if you want to pre-warm or rebuild the cache, and deleting the cache directory is always safe.
 
 | Key   | Action        |
 | ----- | ------------- |
