@@ -17,6 +17,14 @@
 
 ## Usage
 
+With Nix (no setup required — bun and ffmpeg are provided):
+
+```bash
+nix run github:ryoppippi/bad-apple#opentui
+```
+
+Or directly with Bun from this directory:
+
 ```bash
 bun install
 bun start
