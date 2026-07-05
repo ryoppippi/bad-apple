@@ -2,6 +2,8 @@
 
 [Bad Apple!!](https://www.nicovideo.jp/watch/sm8628149) player for the terminal, built with [OpenTUI](https://opentui.com/) (`@opentui/core`).
 
+<video src="https://raw.githubusercontent.com/ryoppippi/bad-apple/main/opentui/docs/demo.mp4" controls muted></video>
+
 - Renders the video as Unicode braille art, scaled to your terminal size (2×4 dots per cell — a 200×50 terminal gives you a 400×200 pixel picture)
 - Plays the music through OpenTUI's built-in audio engine
 - Video timing is driven by the audio mixer clock, so picture and sound stay in sync
@@ -23,11 +25,11 @@ bun start
 
 When run with Bun, the first start downloads the PV from the Internet Archive and generates the packed 1bpp frames plus the WAV audio track into `$XDG_CACHE_HOME/opentui-bad-apple` (default `~/.cache/opentui-bad-apple`). Subsequent runs use the cached assets and start instantly. `bun run generate` runs the same generation step on its own if you want to pre-warm or rebuild the cache, and deleting the cache directory is always safe. (The Nix package instead builds these assets as a derivation and points the player at them via `OPENTUI_BAD_APPLE_ASSETS`.)
 
-| Key   | Action        |
-| ----- | ------------- |
-| `q` / `esc` | quit    |
-| `r`   | restart       |
-| `m`   | mute toggle   |
+| Key         | Action      |
+| ----------- | ----------- |
+| `q` / `esc` | quit        |
+| `r`         | restart     |
+| `m`         | mute toggle |
 
 Pass `--muted` to start with the volume at zero: `bun start --muted`.
 
