@@ -64,8 +64,8 @@ function requireTool(name: string): Result.Result<string, Error> {
 		return Result.fail(
 			new Error(
 				`${name} not found in PATH.\n` +
-					`hint: run inside a nix shell, e.g.\n` +
-					`  nix shell nixpkgs#ffmpeg-headless --command bun start`,
+					`hint: install ffmpeg, or skip the setup entirely with\n` +
+					`  nix run github:ryoppippi/bad-apple#opentui`,
 			),
 		);
 	}

@@ -6,26 +6,15 @@
 - Plays the music through OpenTUI's built-in audio engine
 - Video timing is driven by the audio mixer clock, so picture and sound stay in sync
 
-## Requirements
-
-- [Bun](https://bun.com)
-- `ffmpeg` / `ffprobe` (only used on the first run to generate assets), e.g. via Nix:
-
-  ```bash
-  nix shell nixpkgs#ffmpeg-headless
-  ```
-
 ## Usage
 
-With Nix (no setup required — the media assets are downloaded and converted as part of the build, so playback starts immediately):
+With Nix, nothing else is required — the media assets are downloaded and converted as part of the build, so playback starts immediately:
 
 ```bash
 nix run github:ryoppippi/bad-apple#opentui
-# or target this subflake directly
-nix run 'github:ryoppippi/bad-apple?dir=opentui'
 ```
 
-Or directly with Bun from this directory:
+Or directly with [Bun](https://bun.com) from this directory (`ffmpeg`/`ffprobe` must be on PATH for the first run):
 
 ```bash
 bun install
